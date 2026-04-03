@@ -1,5 +1,7 @@
 # Fashion Star PiperMate Teleoperator for reBot B601
 
+[中文版说明](./README.zh-CN.md)
+
 This repository provides a LeRobot teleoperator integration for the Fashion Star PiperMate leader arm, intended to be paired with the Seeed reBot B601 follower arm.
 
 The implementation is intentionally opinionated:
@@ -48,7 +50,11 @@ Standard teleoperation:
 lerobot-teleoperate \
   --teleop.type=fasionstar_pipermate_leader \
   --teleop.id=pipermate_leader \
-  --teleop.port=/dev/ttyUSB0
+  --teleop.port=/dev/ttyUSB0 \
+  --robot.type=seeed_b601_dm_follower \
+    --robot.id=follower1 \
+    --robot.port=/dev/ttyACM4 \
+    --robot.can_adapter=damiao
 ```
 
 ## Example Scripts

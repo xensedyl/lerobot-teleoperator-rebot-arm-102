@@ -37,21 +37,29 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Read PiperMate leader and B601 follower positions side by side."
     )
-    parser.add_argument("--leader-port", required=True, help="PiperMate serial port, e.g. /dev/ttyUSB0")
+    parser.add_argument(
+        "--leader-port", required=True, help="PiperMate serial port, e.g. /dev/ttyUSB0"
+    )
     parser.add_argument("--leader-id", default="pipermate_leader")
-    parser.add_argument("--leader-baudrate", type=int, default=1_000_000)
+    parser.add_argument("--leader-baudrate", type=int, default=1000000)
     parser.add_argument(
         "--leader-calibration-dir",
         type=Path,
         default=None,
         help="Optional LeRobot calibration directory override for the PiperMate leader",
     )
-    parser.add_argument("--follower-port", required=True, help="B601 CAN port, e.g. can0 or /dev/ttyACM0")
+    parser.add_argument(
+        "--follower-port",
+        required=True,
+        help="B601 CAN port, e.g. can0 or /dev/ttyACM0",
+    )
     parser.add_argument("--follower-id", default="b601_follower")
     parser.add_argument("--follower-type", choices=["dm", "rs"], default="dm")
     parser.add_argument("--follower-can-adapter", default="socketcan")
     parser.add_argument("--follower-dm-serial-baud", type=int, default=921600)
-    parser.add_argument("--interval", type=float, default=0.2, help="Polling interval in seconds")
+    parser.add_argument(
+        "--interval", type=float, default=0.2, help="Polling interval in seconds"
+    )
     return parser.parse_args()
 
 
@@ -98,19 +106,43 @@ def main() -> None:
                 "No PiperMate calibration file found. Run examples/calibrate.py first."
             )
 
+        directions = leader.config.joint_directions
+        ranges = leader.config.joint_ranges
+
         print("Reading leader/follower positions side by side. Press Ctrl+C to stop.")
         while True:
+            raw_positions = leader._read_raw_positions()
             leader_action = leader.get_action()
             follower_obs = follower.get_observation()
+
             os.system("clear")
-            print("Reading leader/follower positions side by side. Press Ctrl+C to stop.\n")
-            print(f"{'joint':<16} {'leader':>10} {'follower':>10} {'delta':>10}")
-            print(f"{'-' * 16} {'-' * 10} {'-' * 10} {'-' * 10}")
+            print(
+                "Reading leader/follower positions side by side. Press Ctrl+C to stop.\n"
+            )
+            print(
+                f"{'joint':<16} {'raw':>8} {'dir':>4} {'directed':>9} "
+                f"{'range':>13} {'clamped':>8} {'follower':>9} {'delta':>8}"
+            )
+            print(
+                f"{'-' * 16} {'-' * 8} {'-' * 4} {'-' * 9} "
+                f"{'-' * 13} {'-' * 8} {'-' * 9} {'-' * 8}"
+            )
+
             for joint in leader.motor_names:
-                leader_pos = leader_action[f"{joint}.pos"]
+                raw = raw_positions[joint]
+                d = directions[joint]
+                directed = raw * d
+                r_min, r_max = ranges[joint]
+                clamped = leader_action[f"{joint}.pos"]
                 follower_pos = follower_obs[f"{joint}.pos"]
-                delta = follower_pos - leader_pos
-                print(f"{joint:<16} {leader_pos:10.2f} {follower_pos:10.2f} {delta:10.2f}")
+                delta = follower_pos - clamped
+
+                range_str = f"[{r_min},{r_max}]"
+                print(
+                    f"{joint:<16} {raw:8.2f} {d:>+4d} {directed:9.2f} "
+                    f"{range_str:>13} {clamped:8.2f} {follower_pos:9.2f} {delta:8.2f}"
+                )
+
             time.sleep(args.interval)
     except KeyboardInterrupt:
         pass

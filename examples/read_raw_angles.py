@@ -22,8 +22,10 @@ def parse_args() -> argparse.Namespace:
         description="Read raw PiperMate servo angles without LeRobot calibration."
     )
     parser.add_argument("--port", required=True, help="Serial port, e.g. /dev/ttyUSB0")
-    parser.add_argument("--baudrate", type=int, default=1_000_000)
-    parser.add_argument("--interval", type=float, default=0.2, help="Polling interval in seconds")
+    parser.add_argument("--baudrate", type=int, default=1000000)
+    parser.add_argument(
+        "--interval", type=float, default=0.2, help="Polling interval in seconds"
+    )
     return parser.parse_args()
 
 
@@ -32,6 +34,15 @@ def main() -> None:
     porthandler = PortHandler(args.port, args.baudrate)
     porthandler.openPort()
 
+    # Initialize servos: ping, unlock, and reset multi-turn counter.
+    # Without this the SDK returns None for all monitor fields.
+    for servo_id in DEFAULT_JOINT_IDS.values():
+        if not porthandler.ping(servo_id):
+            print(f"WARNING: servo id={servo_id} did not respond to ping")
+        porthandler.write["Stop_On_Control_Mode"](servo_id, "unlocked", 900)
+        time.sleep(0.01)
+    porthandler.ResetLoop(0xFF)
+
     try:
         print("Reading raw servo angles. Press Ctrl+C to stop.")
         while True:
@@ -39,7 +50,7 @@ def main() -> None:
             values = []
             for joint_name in DEFAULT_JOINT_IDS:
                 state = monitor_data.get(joint_name)
-                if state is None:
+                if state is None or state.current_position is None:
                     values.append(f"{joint_name}=<missing>")
                 else:
                     values.append(f"{joint_name}={float(state.current_position):8.2f}")

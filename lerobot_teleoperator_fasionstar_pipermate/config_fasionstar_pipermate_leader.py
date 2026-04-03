@@ -21,15 +21,18 @@ class FasionStarPiperMateLeaderConfig(TeleoperatorConfig):
             "gripper": 6,
         }
     )
+
+    # Optional LeRobot calibration directory override for the PiperMate leader.
+    # Note that the factor for gripper is also adding a scale of 2 to better match reBot B601's gripper range.
     joint_directions: dict[str, int] = field(
         default_factory=lambda: {
             "shoulder_pan": -1,
-            "shoulder_lift": 1,
+            "shoulder_lift": -1,
             "elbow_flex": 1,
             "wrist_flex": 1,
             "wrist_yaw": 1,
             "wrist_roll": -1,
-            "gripper": -1,
+            "gripper": -2,
         }
     )
     joint_ranges: dict[str, list[int]] = field(
