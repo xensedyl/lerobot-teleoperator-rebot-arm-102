@@ -8,25 +8,25 @@ from lerobot.processor import RobotAction
 from lerobot.teleoperators.teleoperator import Teleoperator
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
 
-from .config_fasionstar_pipermate_leader import FasionStarPiperMateLeaderConfig
+from .config_rebot_arm_102_leader import RebotArm102LeaderConfig
 
 logger = logging.getLogger(__name__)
 
 MEDIUM_TIMEOUT_SEC = 0.01
 
 
-class FasionStarPiperMateLeader(Teleoperator):
+class RebotArm102Leader(Teleoperator):
     """
-    LeRobot teleoperator integration for the Fashion Star PiperMate leader arm.
+    LeRobot teleoperator integration for the reBot Arm 102 leader arm.
 
     This implementation keeps the lifecycle and calibration flow close to other
     LeRobot leader teleoperators. The servo SDK is only used for device access.
     """
 
-    config_class = FasionStarPiperMateLeaderConfig
-    name = "fasionstar_pipermate_leader"
+    config_class = RebotArm102LeaderConfig
+    name = "rebot_arm_102_leader"
 
-    def __init__(self, config: FasionStarPiperMateLeaderConfig):
+    def __init__(self, config: RebotArm102LeaderConfig):
         super().__init__(config)
         self.config = config
         self.porthandler = PortHandler(self.config.port, self.config.baudrate)
@@ -96,7 +96,7 @@ class FasionStarPiperMateLeader(Teleoperator):
         logger.info(f"\nRunning calibration for {self}")
         input(
             "\nCalibration: Set Zero Position\n"
-            "Please manually move the PiperMate arm to its zero pose and close the gripper.\n"
+            "Please manually move the reBot Arm 102 to its zero pose and close the gripper.\n"
             "Press ENTER when ready..."
         )
 
@@ -157,7 +157,7 @@ class FasionStarPiperMateLeader(Teleoperator):
         return action_dict
 
     def send_feedback(self, feedback: dict[str, float]) -> None:
-        raise NotImplementedError("Feedback is not implemented for the PiperMate leader.")
+        raise NotImplementedError("Feedback is not implemented for the reBot Arm 102 leader.")
 
     def disconnect(self) -> None:
         if not self.is_connected:

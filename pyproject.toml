@@ -3,9 +3,9 @@ requires = ["setuptools>=61", "setuptools-scm[toml]>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "lerobot_teleoperator_fasionstar_pipermate"
+name = "lerobot_teleoperator_rebot_arm_102"
 dynamic = ["version"]
-description = "Fashion Star PiperMate teleoperator integration with LeRobot"
+description = "reBot Arm 102 teleoperator integration with LeRobot"
 readme = "README.md"
 authors = [
   { name = "Jack Shao", email = "jack.shao@seeed.cc" },
@@ -24,7 +24,7 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["lerobot_teleoperator_fasionstar_pipermate"]
+include = ["lerobot_teleoperator_rebot_arm_102"]
 exclude = ["*.egg-info"]
 
 [tool.setuptools_scm]

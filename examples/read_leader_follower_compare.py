@@ -5,9 +5,9 @@ import os
 import time
 from pathlib import Path
 
-from lerobot_teleoperator_fasionstar_pipermate import (
-    FasionStarPiperMateLeader,
-    FasionStarPiperMateLeaderConfig,
+from lerobot_teleoperator_rebot_arm_102 import (
+    RebotArm102Leader,
+    RebotArm102LeaderConfig,
 )
 from lerobot_robot_seeed_b601 import (
     SeeedB601DMFollower,
@@ -35,18 +35,18 @@ class PassiveSeeedB601RSFollower(SeeedB601RSFollower):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Read PiperMate leader and B601 follower positions side by side."
+        description="Read reBot Arm 102 leader and B601 follower positions side by side."
     )
     parser.add_argument(
-        "--leader-port", required=True, help="PiperMate serial port, e.g. /dev/ttyUSB0"
+        "--leader-port", required=True, help="reBot Arm 102 serial port, e.g. /dev/ttyUSB0"
     )
-    parser.add_argument("--leader-id", default="pipermate_leader")
+    parser.add_argument("--leader-id", default="rebot_arm_102_leader")
     parser.add_argument("--leader-baudrate", type=int, default=1000000)
     parser.add_argument(
         "--leader-calibration-dir",
         type=Path,
         default=None,
-        help="Optional LeRobot calibration directory override for the PiperMate leader",
+        help="Optional LeRobot calibration directory override for the reBot Arm 102 leader",
     )
     parser.add_argument(
         "--follower-port",
@@ -87,8 +87,8 @@ def make_follower(args: argparse.Namespace):
 def main() -> None:
     args = parse_args()
 
-    leader = FasionStarPiperMateLeader(
-        FasionStarPiperMateLeaderConfig(
+    leader = RebotArm102Leader(
+        RebotArm102LeaderConfig(
             id=args.leader_id,
             port=args.leader_port,
             baudrate=args.leader_baudrate,
@@ -103,7 +103,7 @@ def main() -> None:
     try:
         if not leader.is_calibrated:
             raise RuntimeError(
-                "No PiperMate calibration file found. Run examples/calibrate.py first."
+                "No reBot Arm 102 calibration file found. Run examples/calibrate.py first."
             )
 
         directions = leader.config.joint_directions

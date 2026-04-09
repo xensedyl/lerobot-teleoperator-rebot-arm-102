@@ -19,7 +19,7 @@ DEFAULT_JOINT_IDS = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Read raw PiperMate servo angles without LeRobot calibration."
+        description="Read raw reBot Arm 102 servo angles without LeRobot calibration."
     )
     parser.add_argument("--port", required=True, help="Serial port, e.g. /dev/ttyUSB0")
     parser.add_argument("--baudrate", type=int, default=1000000)

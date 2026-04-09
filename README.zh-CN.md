@@ -1,8 +1,8 @@
-# 适用于 reBot B601 的 Fashion Star PiperMate 遥操作器
+# 适用于 reBot B601 的 reBot Arm 102 遥操作器
 
 [English README](./README.md)
 
-本仓库提供了一个 LeRobot 遥操作集成，用于将 Fashion Star PiperMate 作为主手臂，并与 Seeed reBot B601 从手臂配合使用。
+本仓库提供了一个 LeRobot 遥操作集成，用于将 reBot Arm 102 作为主手臂，并与 Seeed reBot B601 从手臂配合使用。
 
 当前实现带有明确的预设约束：
 
@@ -13,22 +13,22 @@
 
 ## 支持的硬件组合
 
-- 主手臂：Fashion Star PiperMate
+- 主手臂：reBot Arm 102
 - 从手臂：Seeed reBot B601
-- 通信方式：PiperMate 使用 UART，B601 使用 CAN 或达妙串口桥
+- 通信方式：reBot Arm 102 使用 UART，B601 使用 CAN 或达妙串口桥
 
 ## 安装
 
 先安装 LeRobot，再以可编辑模式安装本包：
 
 ```bash
-cd lerobot-teleoperator-fasionstar-pipermate
+cd lerobot-teleoperator-rebot-arm-102
 pip install -e .
 ```
 
 本包注册了一个 teleoperator 类型：
 
-- `fasionstar_pipermate_leader`
+- `rebot_arm_102_leader`
 
 ## 默认映射
 
@@ -40,7 +40,7 @@ pip install -e .
 - `wrist_roll` -> 舵机 ID `5`
 - `gripper` -> 舵机 ID `6`
 
-关节方向和关节限位定义在 `lerobot_teleoperator_fasionstar_pipermate/config_fasionstar_pipermate_leader.py` 中。
+关节方向和关节限位定义在 `lerobot_teleoperator_rebot_arm_102/config_rebot_arm_102_leader.py` 中。
 
 ## 使用方法
 
@@ -48,8 +48,8 @@ pip install -e .
 
 ```bash
 lerobot-teleoperate \
-  --teleop.type=fasionstar_pipermate_leader \
-  --teleop.id=pipermate_leader \
+  --teleop.type=rebot_arm_102_leader \
+  --teleop.id=rebot_arm_102_leader \
   --teleop.port=/dev/ttyUSB0 \
   --robot.type=seeed_b601_dm_follower \
     --robot.id=follower1 \
@@ -63,14 +63,14 @@ lerobot-teleoperate \
 
 用途：
 
-- 直接从 Fashion Star SDK 读取 PiperMate 原始舵机角度
+- 直接从 SDK 读取 reBot Arm 102 原始舊机角度
 - 验证舵机 ID 与关节名称的映射关系
 - 检查某个关节是否真的在硬件层发生变化
 
 用法：
 
 ```bash
-cd lerobot-teleoperator-fasionstar-pipermate
+cd lerobot-teleoperator-rebot-arm-102
 python examples/read_raw_angles.py --port /dev/ttyUSB0
 ```
 
@@ -84,7 +84,7 @@ python examples/read_raw_angles.py --port /dev/ttyUSB0
 
 用途：
 
-- 并排读取 PiperMate 主手输出和 B601 从手观测值
+- 并排读取 reBot Arm 102 主手输出和 B601 从手观测值
 - 逐关节比较 `leader`、`follower` 和 `delta`
 - 在不发送从手控制命令的前提下安全排查方向不一致问题
 
@@ -101,14 +101,14 @@ python examples/read_raw_angles.py --port /dev/ttyUSB0
 Damiao 从手接在 `can0` 时的用法：
 
 ```bash
-cd lerobot-teleoperator-fasionstar-pipermate
+cd lerobot-teleoperator-rebot-arm-102
 python examples/read_leader_follower_compare.py --leader-port /dev/ttyUSB0 --follower-port can0 --follower-type dm
 ```
 
 通过达妙串口桥连接 Damiao 从手时的用法：
 
 ```bash
-cd lerobot-teleoperator-fasionstar-pipermate
+cd lerobot-teleoperator-rebot-arm-102
 python examples/read_leader_follower_compare.py --leader-port /dev/ttyUSB0 --follower-port /dev/ttyACM0 --follower-type dm --follower-can-adapter damiao
 ```
 
@@ -133,6 +133,6 @@ python examples/read_leader_follower_compare.py --leader-port /dev/ttyUSB0 --fol
 
 ## 说明
 
-- 按当前实现，启动校准会把每个 PiperMate 舵机的当前位置重设为零点。
+- 按当前实现，启动校准会把每个 reBot Arm 102 舊机的当前位置重设为零点。
 - `joint_ranges` 取自配置文件，而不是校准数据。
 - 如果某个关节看起来总是卡在某个限位附近，优先检查 `joint_ranges`。

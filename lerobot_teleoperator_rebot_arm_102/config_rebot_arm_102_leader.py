@@ -3,10 +3,10 @@ from dataclasses import dataclass, field
 from lerobot.teleoperators.config import TeleoperatorConfig
 
 
-@TeleoperatorConfig.register_subclass("fasionstar_pipermate_leader")
+@TeleoperatorConfig.register_subclass("rebot_arm_102_leader")
 @dataclass
-class FasionStarPiperMateLeaderConfig(TeleoperatorConfig):
-    """Configuration for the Fashion Star PiperMate leader arm."""
+class RebotArm102LeaderConfig(TeleoperatorConfig):
+    """Configuration for the reBot Arm 102 leader arm."""
 
     port: str
     baudrate: int = 1_000_000
@@ -22,7 +22,7 @@ class FasionStarPiperMateLeaderConfig(TeleoperatorConfig):
         }
     )
 
-    # Optional LeRobot calibration directory override for the PiperMate leader.
+    # Optional LeRobot calibration directory override for the reBot Arm 102 leader.
     # Note that the factor for gripper is also adding a scale of 2 to better match reBot B601's gripper range.
     joint_directions: dict[str, int] = field(
         default_factory=lambda: {
