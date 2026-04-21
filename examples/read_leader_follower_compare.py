@@ -43,19 +43,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--leader-id", default="rebot_arm_102_leader")
     parser.add_argument("--leader-baudrate", type=int, default=1000000)
     parser.add_argument(
-        "--leader-calibration-dir",
-        type=Path,
-        default=None,
-        help="Optional LeRobot calibration directory override for the reBot Arm 102 leader",
-    )
-    parser.add_argument(
         "--follower-port",
         required=True,
         help="B601 CAN port, e.g. can0 or /dev/ttyACM0",
     )
     parser.add_argument("--follower-id", default="b601_follower")
     parser.add_argument("--follower-type", choices=["dm", "rs"], default="dm")
-    parser.add_argument("--follower-can-adapter", default="socketcan")
+    parser.add_argument("--follower-can-adapter", default="socketcan", help="damian, socketcan")
     parser.add_argument("--follower-dm-serial-baud", type=int, default=921600)
     parser.add_argument(
         "--interval", type=float, default=0.2, help="Polling interval in seconds"
@@ -92,7 +86,6 @@ def main() -> None:
             id=args.leader_id,
             port=args.leader_port,
             baudrate=args.leader_baudrate,
-            calibration_dir=args.leader_calibration_dir,
         )
     )
     follower = make_follower(args)

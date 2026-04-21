@@ -75,10 +75,11 @@ class RebotArm102Leader(Teleoperator):
 
             self._is_connected = True
 
-            # if not self.is_calibrated and calibrate:
-            #     logger.info("No calibration file found. Running calibration.")
-            #     self.calibrate()
-            self.calibrate()
+            if not self.is_calibrated and calibrate:
+                logger.info(
+                    "Mismatch between calibration values in the motor and the calibration file or no calibration file found"
+                )
+                self.calibrate()
 
             self.configure()
         except Exception:
@@ -93,6 +94,14 @@ class RebotArm102Leader(Teleoperator):
         return bool(self.calibration) and set(self.calibration) == set(self.motor_names)
 
     def calibrate(self) -> None:
+        if self.calibration:
+            user_input = input(
+                f"Press ENTER to use provided calibration file associated with the id {self.id}, or type 'c' and press ENTER to run calibration: "
+            )
+            if user_input.strip().lower() != "c":
+                logger.info(f"Using calibration file associated with the id {self.id}")
+                return
+        
         logger.info(f"\nRunning calibration for {self}")
         input(
             "\nCalibration: Set Zero Position\n"
@@ -100,8 +109,11 @@ class RebotArm102Leader(Teleoperator):
             "Press ENTER when ready..."
         )
 
+        logger.info("Setting range: -90° to +90° by default for all joints")
         self.calibration = {}
         for motor_name, motor_id in self.config.joint_ids.items():
+            self.porthandler.write["Stop_On_Control_Mode"](motor_id, "unlocked", self.config.unlock_timeout_ms)
+            time.sleep(MEDIUM_TIMEOUT_SEC)
             self.porthandler.set_origin_point(motor_id)
             self.calibration[motor_name] = MotorCalibration(
                 id=self.config.joint_ids[motor_name],
@@ -128,7 +140,12 @@ class RebotArm102Leader(Teleoperator):
             state = monitor_data.get(motor_name)
             if state is None:
                 raise RuntimeError(f"Failed to read monitor data for {motor_name}.")
-            raw_positions[motor_name] = float(state.current_position)
+            pos = float(state.current_position)
+            if abs(pos) > 360:
+                original_pos = pos
+                pos = (abs(pos) % 360) * (1.0 if pos >= 0 else -1.0)
+                logger.warning(f"Value {original_pos} exceeded 360 degrees and was wrapped to {pos}.")
+            raw_positions[motor_name] = pos
         return raw_positions
 
     @staticmethod
