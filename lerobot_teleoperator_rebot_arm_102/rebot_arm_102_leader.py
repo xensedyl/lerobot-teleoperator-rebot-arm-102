@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Any
+from typing import Any, Tuple
 
 from motorbridge_smart_servo import FashionStarServo, ServoMonitor, ServoBusError
 from lerobot.motors import MotorCalibration
@@ -32,7 +32,6 @@ class RebotArm102Leader(Teleoperator):
         self.bus: FashionStarServo | None = None
         self.motor_names = list(self.config.joint_ids.keys())
         self._last_raw_positions: dict[str, float] = {}
-        self._last_action_time: float = 0.0
         self._validate_config()
 
     def _validate_config(self) -> None:
@@ -153,6 +152,28 @@ class RebotArm102Leader(Teleoperator):
     @staticmethod
     def _clamp(value: float, min_value: float, max_value: float) -> float:
         return max(min_value, min(max_value, value))
+    
+    @staticmethod
+    def _round_to_valid_range(value: float, min_value: float, max_value: float) -> Tuple[float, int]:
+        """Unwrap a multi-turn angle back into the ±180° window centred on (min+max)/2.
+
+        The servo may report an angle that has accumulated extra full rotations
+        (value = true_angle + N*360).  We do not know the sign of N, so we use a
+        bidirectional search: starting from k=0, simultaneously try value+k*360 and
+        value-k*360 until the first candidate that falls inside [center-180, center+180].
+        """
+        center = (min_value + max_value) / 2.0
+        low = center - 180.0
+        high = center + 180.0
+        for k in range(4096):
+            candidate_plus = value + k * 360.0
+            if low <= candidate_plus <= high:
+                return candidate_plus, k
+            candidate_minus = value - k * 360.0
+            if low <= candidate_minus <= high:
+                return candidate_minus, k
+        # Fallback: direct modular arithmetic (should never be reached)
+        return value - round((value - center) / 360.0) * 360.0, 4096
 
     def get_action(self) -> RobotAction:
         start = time.perf_counter()
@@ -163,19 +184,8 @@ class RebotArm102Leader(Teleoperator):
         raw_positions: dict[str, Any] = {}
         try:
             raw_positions = self._read_raw_positions()
-
-            dt = start - self._last_action_time if self._last_action_time > 0 else None
-            if dt and dt > 0 and self._last_raw_positions:
-                velocities = {
-                    motor: (raw_positions[motor] - self._last_raw_positions[motor]) / dt
-                    for motor in self.motor_names
-                    if motor in self._last_raw_positions
-                }
-                vel_str = ", ".join(f"{m}: {v:+.1f}°/s" for m, v in velocities.items())
-                logger.debug(f"Angular velocities: {vel_str}")
-
+            logger.debug(f"Raw positions: {', '.join(f'{m}: {p:.1f}°' for m, p in raw_positions.items())}")
             self._last_raw_positions = raw_positions
-            self._last_action_time = start
         except Exception as e:
             logger.error(f"Failed to read raw positions: {e}")
             logger.warning("[EMERGENCY STOP] Please hold the follower arm and cut off the main power to the arms.")
@@ -184,8 +194,16 @@ class RebotArm102Leader(Teleoperator):
             
         action_dict: dict[str, Any] = {}
         for motor_name in self.motor_names:
-            position = raw_positions[motor_name] * self.config.joint_directions[motor_name]
             range_min, range_max = self.config.joint_ranges[motor_name]
+            direction = self.config.joint_directions[motor_name]
+            sign = 1.0 if direction >= 0 else -1.0
+            unwrapped, k = self._round_to_valid_range(raw_positions[motor_name], range_min * sign, range_max * sign)
+            position = unwrapped * direction
+            if k > 0:
+                logger.debug(
+                    f"Servo {motor_name} (id={self.config.joint_ids[motor_name]}) has wrapped {k} * 360°. "
+                    f"Unwrapped pos: {unwrapped:.1f}° (raw: {raw_positions[motor_name]:.1f}°)"
+                )
             action_dict[f"{motor_name}.pos"] = self._clamp(
                 position,
                 float(range_min),
