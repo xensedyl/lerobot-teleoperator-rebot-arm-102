@@ -46,4 +46,3 @@ class RebotArm102LeaderConfig(TeleoperatorConfig):
             "gripper": [-270, 0],
         }
     )
-    unlock_timeout_ms: int = 900

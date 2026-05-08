@@ -2,7 +2,7 @@ import logging
 import time
 from typing import Any
 
-from fashionstar_uart_sdk.uart_pocket_handler import Monitor_data, PortHandler
+from motorbridge_smart_servo import FashionStarServo, ServoMonitor, ServoBusError
 from lerobot.motors import MotorCalibration
 from lerobot.processor import RobotAction
 from lerobot.teleoperators.teleoperator import Teleoperator
@@ -29,9 +29,10 @@ class RebotArm102Leader(Teleoperator):
     def __init__(self, config: RebotArm102LeaderConfig):
         super().__init__(config)
         self.config = config
-        self.porthandler = PortHandler(self.config.port, self.config.baudrate)
+        self.bus: FashionStarServo | None = None
         self.motor_names = list(self.config.joint_ids.keys())
-        self._is_connected = False
+        self._last_raw_positions: dict[str, float] = {}
+        self._last_action_time: float = 0.0
         self._validate_config()
 
     def _validate_config(self) -> None:
@@ -59,21 +60,22 @@ class RebotArm102Leader(Teleoperator):
 
     @property
     def is_connected(self) -> bool:
-        return self._is_connected
+        return self.bus is not None
 
     def connect(self, calibrate: bool = True) -> None:
         if self.is_connected:
             raise DeviceAlreadyConnectedError(f"{self} already connected")
 
         logger.info(f"Connecting arm on {self.config.port}...")
-        self.porthandler.openPort()
+        bus = FashionStarServo(self.config.port, baudrate=self.config.baudrate)
 
         try:
             for motor_name, motor_id in self.config.joint_ids.items():
-                if not self.porthandler.ping(motor_id):
+                if not bus.ping(motor_id):
                     raise RuntimeError(f"Servo not found for {motor_name} (id={motor_id}).")
+                self._last_raw_positions[motor_name] = 0.0
 
-            self._is_connected = True
+            self.bus = bus
 
             if not self.is_calibrated and calibrate:
                 logger.info(
@@ -83,8 +85,8 @@ class RebotArm102Leader(Teleoperator):
 
             self.configure()
         except Exception:
-            self.porthandler.closePort()
-            self._is_connected = False
+            bus.close()
+            self.bus = None
             raise
 
         logger.info(f"{self} connected.")
@@ -112,9 +114,9 @@ class RebotArm102Leader(Teleoperator):
         logger.info("Setting range: -90° to +90° by default for all joints")
         self.calibration = {}
         for motor_name, motor_id in self.config.joint_ids.items():
-            self.porthandler.write["Stop_On_Control_Mode"](motor_id, "unlocked", self.config.unlock_timeout_ms)
+            self.bus.unlock(motor_id)
             time.sleep(MEDIUM_TIMEOUT_SEC)
-            self.porthandler.set_origin_point(motor_id)
+            self.bus.set_origin_point(motor_id)
             self.calibration[motor_name] = MotorCalibration(
                 id=self.config.joint_ids[motor_name],
                 drive_mode=0,
@@ -128,24 +130,24 @@ class RebotArm102Leader(Teleoperator):
 
     def configure(self) -> None:
         for motor_id in self.config.joint_ids.values():
-            self.porthandler.write["Stop_On_Control_Mode"](motor_id, "unlocked", self.config.unlock_timeout_ms)
+            self.bus.unlock(motor_id)
             time.sleep(MEDIUM_TIMEOUT_SEC)
 
-        self.porthandler.ResetLoop(0xFF)
+        # Reset multi-turn counter per servo (old SDK used broadcast 0xFF which is out of range).
+        for motor_id in self.config.joint_ids.values():
+            self.bus.reset_multi_turn(motor_id)
 
     def _read_raw_positions(self) -> dict[str, float]:
-        monitor_data: dict[str, Monitor_data] = self.porthandler.sync_read["Monitor"](self.config.joint_ids)
+        result: dict[int, ServoMonitor | None] = self.bus.sync_monitor(
+            list(self.config.joint_ids.values())
+        )
+        id_to_name = {v: k for k, v in self.config.joint_ids.items()}
         raw_positions: dict[str, float] = {}
-        for motor_name in self.motor_names:
-            state = monitor_data.get(motor_name)
-            if state is None:
-                raise RuntimeError(f"Failed to read monitor data for {motor_name}.")
-            pos = float(state.current_position)
-            if abs(pos) > 360:
-                original_pos = pos
-                pos = (abs(pos) % 360) * (1.0 if pos >= 0 else -1.0)
-                logger.warning(f"Value {original_pos} exceeded 360 degrees and was wrapped to {pos}.")
-            raw_positions[motor_name] = pos
+        for motor_id, m in result.items():
+            motor_name = id_to_name[motor_id]
+            if m is None:
+                raise RuntimeError(f"Servo {motor_name} (id={motor_id}) has never responded.")
+            raw_positions[motor_name] = m.angle_deg
         return raw_positions
 
     @staticmethod
@@ -157,8 +159,29 @@ class RebotArm102Leader(Teleoperator):
 
         if not self.is_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
+        
+        raw_positions: dict[str, Any] = {}
+        try:
+            raw_positions = self._read_raw_positions()
 
-        raw_positions = self._read_raw_positions()
+            dt = start - self._last_action_time if self._last_action_time > 0 else None
+            if dt and dt > 0 and self._last_raw_positions:
+                velocities = {
+                    motor: (raw_positions[motor] - self._last_raw_positions[motor]) / dt
+                    for motor in self.motor_names
+                    if motor in self._last_raw_positions
+                }
+                vel_str = ", ".join(f"{m}: {v:+.1f}°/s" for m, v in velocities.items())
+                logger.debug(f"Angular velocities: {vel_str}")
+
+            self._last_raw_positions = raw_positions
+            self._last_action_time = start
+        except Exception as e:
+            logger.error(f"Failed to read raw positions: {e}")
+            logger.warning("[EMERGENCY STOP] Please hold the follower arm and cut off the main power to the arms.")
+            logger.warning("[EMERGENCY STOP] Break the teleoperation session and check the USB connection or power of the leader arm.")
+            raw_positions = self._last_raw_positions
+            
         action_dict: dict[str, Any] = {}
         for motor_name in self.motor_names:
             position = raw_positions[motor_name] * self.config.joint_directions[motor_name]
@@ -180,6 +203,6 @@ class RebotArm102Leader(Teleoperator):
         if not self.is_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
 
-        self.porthandler.closePort()
-        self._is_connected = False
+        self.bus.close()
+        self.bus = None
         logger.info(f"{self} disconnected.")
