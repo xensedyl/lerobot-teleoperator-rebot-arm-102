@@ -7,8 +7,8 @@
 当前实现带有明确的预设约束：
 
 - 关节名称按 reBot B601 对齐
-- 关节方向在代码中配置
-- 关节限位直接取自配置文件
+- leader 侧关节限位直接取自配置文件
+- follower 侧翻转方向在从手集成中配置
 - 每次启动校准都会将当前舵机位置设置为零点
 
 ## 支持的硬件组合
@@ -40,7 +40,8 @@ pip install -e .
 - `wrist_roll` -> 舵机 ID `5`
 - `gripper` -> 舵机 ID `6`
 
-关节方向和关节限位定义在 `lerobot_teleoperator_rebot_arm_102/config_rebot_arm_102_leader.py` 中。
+leader 侧关节限位定义在 `lerobot_teleoperator_rebot_arm_102/config_rebot_arm_102_leader.py` 中。
+follower 侧翻转方向定义在 B601 从手配置中。
 
 ## 使用方法
 
@@ -78,7 +79,7 @@ python examples/read_raw_angles.py --port /dev/ttyUSB0
 
 - 每次只移动一个关节
 - 确认预期关节对应的列发生变化
-- 如果原始值在变化，但 teleop 行为不对，问题通常出在方向或量程配置，而不是 SDK 读取
+- 如果原始值在变化，但 teleop 行为不对，问题通常出在 leader 侧量程配置或 follower 侧方向配置，而不是 SDK 读取
 
 ### `read_leader_follower_compare.py`
 
@@ -117,19 +118,19 @@ python examples/read_leader_follower_compare.py --leader-port /dev/ttyUSB0 --fol
 脚本会显示 8 列数据帮助调试方向与限位：
 
 - `raw` — 舵机原始角度（未经处理）
-- `dir` — 当前配置的翻转方向（+1 或 -1）
-- `directed` — raw × dir 后的带符号角度
+- `leader` — leader 侧经解缠与限位裁剪后的输出角度
+- `f.dir` — follower 侧当前配置的方向/比例系数
+- `mapped` — leader × f.dir 后、送入 follower 限位前的目标角度
 - `range` — 配置文件中该关节的限位范围
-- `clamped` — 经限位裁剪后的最终 leader 输出值
 - `follower` — B601 从手当前观测角度
-- `delta` — follower - clamped 的差值
+- `delta` — follower - mapped 的差值
 
 观察要点：
 
 - 在主手上移动一个关节，观察 `raw` 列是否随之变化
-- 对比 `directed` 与 `follower` 的变化方向是否一致
-- 若方向相反，修改 `joint_directions` 中对应关节的符号
-- 若 `clamped` 与 `directed` 差异大，检查 `joint_ranges` 是否覆盖实际运动范围
+- 对比 `mapped` 与 `follower` 的变化方向是否一致
+- 若方向相反，修改 follower 配置中的 `joint_directions` 对应关节
+- 若 `leader` 与预期差异大，检查 `joint_ranges` 是否覆盖实际运动范围
 
 ## 说明
 
