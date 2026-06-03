@@ -49,7 +49,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--follower-id", default="b601_follower")
     parser.add_argument("--follower-type", choices=["dm", "rs"], default="dm")
-    parser.add_argument("--follower-can-adapter", default="socketcan", help="damian, socketcan")
+    parser.add_argument("--follower-can-adapter", default="socketcan", help="damiao, socketcan")
     parser.add_argument("--follower-dm-serial-baud", type=int, default=921600)
     parser.add_argument(
         "--interval", type=float, default=0.2, help="Polling interval in seconds"
