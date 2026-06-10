@@ -49,7 +49,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--follower-id", default="b601_follower")
     parser.add_argument("--follower-type", choices=["dm", "rs"], default="dm")
-    parser.add_argument("--follower-can-adapter", default="socketcan", help="damian, socketcan")
+    parser.add_argument("--follower-can-adapter", default="socketcan", help="damiao, socketcan")
     parser.add_argument("--follower-dm-serial-baud", type=int, default=921600)
     parser.add_argument(
         "--interval", type=float, default=0.2, help="Polling interval in seconds"
@@ -99,8 +99,8 @@ def main() -> None:
                 "No reBot Arm 102 calibration file found. Run examples/calibrate.py first."
             )
 
-        directions = leader.config.joint_directions
         ranges = leader.config.joint_ranges
+        follower_directions = follower.config.joint_directions
 
         print("Reading leader/follower positions side by side. Press Ctrl+C to stop.")
         while True:
@@ -113,27 +113,27 @@ def main() -> None:
                 "Reading leader/follower positions side by side. Press Ctrl+C to stop.\n"
             )
             print(
-                f"{'joint':<16} {'raw':>8} {'dir':>4} {'directed':>9} "
-                f"{'range':>13} {'clamped':>8} {'follower':>9} {'delta':>8}"
+                f"{'joint':<16} {'raw':>8} {'range':>13} {'leader':>8} "
+                f"{'f.dir':>6} {'mapped':>8} {'follower':>9} {'delta':>8}"
             )
             print(
-                f"{'-' * 16} {'-' * 8} {'-' * 4} {'-' * 9} "
-                f"{'-' * 13} {'-' * 8} {'-' * 9} {'-' * 8}"
+                f"{'-' * 16} {'-' * 8} {'-' * 13} {'-' * 8} "
+                f"{'-' * 6} {'-' * 8} {'-' * 9} {'-' * 8}"
             )
 
             for joint in leader.motor_names:
                 raw = raw_positions[joint]
-                d = directions[joint]
-                directed = raw * d
                 r_min, r_max = ranges[joint]
-                clamped = leader_action[f"{joint}.pos"]
+                leader_pos = leader_action[f"{joint}.pos"]
+                follower_direction = follower_directions.get(joint, 1.0)
+                mapped = leader_pos * follower_direction
                 follower_pos = follower_obs[f"{joint}.pos"]
-                delta = follower_pos - clamped
+                delta = follower_pos - mapped
 
                 range_str = f"[{r_min},{r_max}]"
                 print(
-                    f"{joint:<16} {raw:8.2f} {d:>+4d} {directed:9.2f} "
-                    f"{range_str:>13} {clamped:8.2f} {follower_pos:9.2f} {delta:8.2f}"
+                    f"{joint:<16} {raw:8.2f} {range_str:>13} {leader_pos:8.2f} "
+                    f"{follower_direction:6.1f} {mapped:8.2f} {follower_pos:9.2f} {delta:8.2f}"
                 )
 
             time.sleep(args.interval)

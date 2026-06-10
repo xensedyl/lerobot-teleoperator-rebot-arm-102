@@ -16,6 +16,7 @@ Usage:
     python examples/test_leader.py --port /dev/ttyUSB0 --action connect
     python examples/test_leader.py --port /dev/ttyUSB0 --action read --duration 10
     python examples/test_leader.py --port /dev/ttyUSB0 --action calibrate
+    python examples/test_leader.py --port /dev/ttyUSB0 --action benchmark --duration 5
 """
 
 import argparse
@@ -23,6 +24,8 @@ import logging
 import time
 
 from motorbridge_smart_servo import FashionStarServo, ServoMonitor, ServoBusError
+
+from lerobot_teleoperator_rebot_arm_102 import RebotArm102Leader, RebotArm102LeaderConfig
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -48,17 +51,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--baudrate", type=int, default=1_000_000)
     parser.add_argument(
         "--action",
-        choices=["connect", "read", "calibrate"],
+        choices=["connect", "read", "calibrate", "benchmark"],
         default="connect",
         help=(
             "connect:   ping + unlock + reset_multi_turn + one angle read; "
             "read:      continuous angle read loop; "
-            "calibrate: unlock + set_origin_point"
+            "calibrate: unlock + set_origin_point; "
+            "benchmark: measure raw read and get_action loop speed"
         ),
     )
     parser.add_argument(
         "--duration", type=float, default=10.0,
-        help="Read duration in seconds (only for --action read)",
+        help="Action duration in seconds (used by --action read and --action benchmark)",
     )
     parser.add_argument(
         "--interval", type=float, default=0.2,
@@ -131,7 +135,40 @@ def read_angles_once(bus: FashionStarServo) -> dict[str, float]:
 
 def print_positions(positions: dict[str, float]) -> None:
     parts = [f"{name}={pos:+8.2f}°" for name, pos in positions.items()]
-    print("  ".join(parts))
+    print("  ".join(parts), flush=True)
+
+
+def benchmark_callable(label: str, fn, duration: float) -> None:
+    print(f"[benchmark] starting {label} for {duration:.2f}s", flush=True)
+    count = 0
+    total_s = 0.0
+    min_s = float("inf")
+    max_s = 0.0
+    deadline = time.monotonic() + duration
+
+    try:
+        while time.monotonic() < deadline:
+            t0 = time.perf_counter()
+            fn()
+            dt_s = time.perf_counter() - t0
+            count += 1
+            total_s += dt_s
+            min_s = min(min_s, dt_s)
+            max_s = max(max_s, dt_s)
+    except ServoBusError as exc:
+        _emergency_stop_and_raise(exc)
+
+    if count == 0:
+        print(f"[benchmark] {label}: no samples collected", flush=True)
+        return
+
+    avg_s = total_s / count
+    print(
+        f"[benchmark] {label}: {count} samples in {duration:.2f}s | "
+        f"avg={avg_s * 1e3:.2f} ms | min={min_s * 1e3:.2f} ms | "
+        f"max={max_s * 1e3:.2f} ms | hz={1.0 / avg_s:.1f}",
+        flush=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -196,10 +233,9 @@ def action_calibrate(bus: FashionStarServo) -> None:
         bus.unlock(motor_id)
         time.sleep(MEDIUM_TIMEOUT_SEC)
         bus.set_origin_point(motor_id)
-        time.sleep(MEDIUM_TIMEOUT_SEC)  # let firmware process origin command
+        time.sleep(MEDIUM_TIMEOUT_SEC)
         logger.info(f"  Origin set for {motor_name} (id={motor_id})")
 
-    # Reset multi-turn counters so sync_monitor reads back near 0° from the new origin
     logger.info("Resetting multi-turn angle counters after origin set...")
     reset_multi_turn_all(bus)
 
@@ -215,12 +251,38 @@ def action_calibrate(bus: FashionStarServo) -> None:
     )
 
 
+def action_benchmark(port: str, baudrate: int, duration: float) -> None:
+    print(f"[benchmark] creating leader on {port} @ {baudrate}", flush=True)
+    leader = RebotArm102Leader(
+        RebotArm102LeaderConfig(
+            id="benchmark_leader",
+            port=port,
+            baudrate=baudrate,
+        )
+    )
+    print("[benchmark] connecting leader", flush=True)
+    leader.connect(calibrate=False)
+    print("[benchmark] leader connected", flush=True)
+    try:
+        benchmark_callable("leader._read_raw_positions", leader._read_raw_positions, duration)
+        benchmark_callable("leader.get_action", leader.get_action, duration)
+    finally:
+        print("[benchmark] disconnecting leader", flush=True)
+        leader.disconnect()
+        print("[benchmark] done", flush=True)
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 def main() -> None:
     args = parse_args()
+    print(f"[test_leader] action={args.action} port={args.port} baudrate={args.baudrate}", flush=True)
+    if args.action == "benchmark":
+        action_benchmark(args.port, args.baudrate, args.duration)
+        return
+
     logger.info(f"Opening bus on {args.port} at {args.baudrate} baud...")
     with FashionStarServo(args.port, baudrate=args.baudrate) as bus:
         logger.info("Bus opened.")

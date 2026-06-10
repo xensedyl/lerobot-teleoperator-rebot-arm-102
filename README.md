@@ -7,8 +7,8 @@ This repository provides a LeRobot teleoperator integration for the reBot Arm 10
 The implementation is intentionally opinionated:
 
 - joint names are aligned to reBot B601
-- joint directions are configured in code
-- joint limits are taken directly from config
+- leader-side joint limits are taken directly from config
+- follower-side direction mapping is configured in the follower integration
 - each startup calibration sets the current servo origin to zero
 
 ## Supported Setup
@@ -40,7 +40,8 @@ This package registers one teleoperator type:
 - `wrist_roll` -> servo ID `5`
 - `gripper` -> servo ID `6`
 
-Joint directions and joint limits are defined in `lerobot_teleoperator_rebot_arm_102/config_rebot_arm_102_leader.py`.
+Leader-side joint limits are defined in `lerobot_teleoperator_rebot_arm_102/config_rebot_arm_102_leader.py`.
+Follower-side direction mapping is defined in the B601 follower configuration.
 
 ## Usage
 
@@ -78,7 +79,7 @@ What to look for:
 
 - move only one joint at a time
 - confirm the expected joint column changes
-- if raw values change but teleop behavior is wrong, the problem is usually direction or range config, not the SDK readout
+- if raw values change but teleop behavior is wrong, the problem is usually the leader range config or the follower direction config, not the SDK readout
 
 ### `read_leader_follower_compare.py`
 
@@ -116,8 +117,8 @@ What to look for:
 
 - move one joint on the leader
 - move the same joint by hand on the follower if needed
-- compare whether `leader` and `follower` change in the same sign direction
-- if one side increases while the other decreases, flip that joint in `joint_directions`
+- compare whether `mapped` and `follower` change in the same sign direction
+- if one side increases while the other decreases, update that joint in the follower `joint_directions` config
 
 ## Notes
 

@@ -36,7 +36,7 @@ class RebotArm102Leader(Teleoperator):
 
     def _validate_config(self) -> None:
         required_keys = set(self.config.joint_ids)
-        for field_name in ("joint_directions", "joint_ranges"):
+        for field_name in ("joint_ranges",):
             keys = set(getattr(self.config, field_name))
             if keys != required_keys:
                 raise ValueError(
@@ -195,20 +195,14 @@ class RebotArm102Leader(Teleoperator):
         action_dict: dict[str, Any] = {}
         for motor_name in self.motor_names:
             range_min, range_max = self.config.joint_ranges[motor_name]
-            direction = self.config.joint_directions[motor_name]
-            sign = 1.0 if direction >= 0 else -1.0
-            unwrapped, k = self._round_to_valid_range(raw_positions[motor_name], range_min * sign, range_max * sign)
-            position = unwrapped * direction
+            unwrapped, k = self._round_to_valid_range(raw_positions[motor_name],float(range_min),float(range_max))
+            position = unwrapped
             if k > 0:
                 logger.debug(
                     f"Servo {motor_name} (id={self.config.joint_ids[motor_name]}) has wrapped {k} * 360°. "
                     f"Unwrapped pos: {unwrapped:.1f}° (raw: {raw_positions[motor_name]:.1f}°)"
                 )
-            action_dict[f"{motor_name}.pos"] = self._clamp(
-                position,
-                float(range_min),
-                float(range_max),
-            )
+            action_dict[f"{motor_name}.pos"] = self._clamp(position,float(range_min),float(range_max),)
 
         dt_ms = (time.perf_counter() - start) * 1e3
         logger.debug(f"{self} read action: {dt_ms:.1f}ms")

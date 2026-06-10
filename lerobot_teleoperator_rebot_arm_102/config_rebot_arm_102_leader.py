@@ -22,27 +22,14 @@ class RebotArm102LeaderConfig(TeleoperatorConfig):
         }
     )
 
-    # Optional LeRobot calibration directory override for the reBot Arm 102 leader.
-    # Note that the factor for gripper is also adding a scale of 6 to better match reBot B601's gripper range.
-    joint_directions: dict[str, int] = field(
-        default_factory=lambda: {
-            "shoulder_pan": -1,
-            "shoulder_lift": -1,
-            "elbow_flex": 1,
-            "wrist_flex": 1,
-            "wrist_yaw": 1,
-            "wrist_roll": -1,
-            "gripper": -6,
-        }
-    )
     joint_ranges: dict[str, list[int]] = field(
         default_factory=lambda: {
-            "shoulder_pan": [-150, 150],
-            "shoulder_lift": [-170, 1],
-            "elbow_flex": [-200, 1],
-            "wrist_flex": [-80, 90],
-            "wrist_yaw": [-90, 90],
-            "wrist_roll": [-90, 90],
-            "gripper": [-270, 0],
+            "shoulder_pan":  (-150.0, 150.0),
+            "shoulder_lift": (-1.0, 170.0),
+            "elbow_flex":    (-200.0, 1.0),
+            "wrist_flex":    (-80.0, 90.0),
+            "wrist_yaw":     (-90.0, 90.0),
+            "wrist_roll":    (-90.0, 90.0),
+            "gripper":       (-0.0, 270.0),
         }
     )
