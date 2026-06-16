@@ -7,8 +7,7 @@
 当前实现带有明确的预设约束：
 
 - 关节名称按 reBot B601 对齐
-- leader 侧关节限位直接取自配置文件
-- follower 侧翻转方向在从手集成中配置
+- leader 侧关节限位和方向映射直接取自配置文件
 - 每次启动校准都会将当前舵机位置设置为零点
 
 ## 支持的硬件组合
@@ -26,9 +25,10 @@ cd lerobot-teleoperator-rebot-arm-102
 pip install -e .
 ```
 
-本包注册了一个 teleoperator 类型：
+本包注册了两个 teleoperator 类型：
 
 - `rebot_arm_102_leader`
+- `bi_rebot_arm_102_leader`
 
 ## 默认映射
 
@@ -40,22 +40,80 @@ pip install -e .
 - `wrist_roll` -> 舵机 ID `5`
 - `gripper` -> 舵机 ID `6`
 
-leader 侧关节限位定义在 `lerobot_teleoperator_rebot_arm_102/config_rebot_arm_102_leader.py` 中。
-follower 侧翻转方向定义在 B601 从手配置中。
+leader 侧关节限位和方向映射定义在
+`lerobot_teleoperator_rebot_arm_102/config_rebot_arm_102_leader.py` 中。默认映射按 B601
+joint action 对齐：`shoulder_pan=-1`、`shoulder_lift=-1`、`elbow_flex=1`、
+`wrist_flex=1`、`wrist_yaw=1`、`wrist_roll=-1`、`gripper=-4`。
+对 RT 串口夹爪，`gripper.pos` 会输出归一化值：`0=open`、`1=closed`。
 
 ## 使用方法
 
-标准遥操作命令：
+### 单臂遥操作
 
 ```bash
 lerobot-teleoperate \
+  --robot.type=seeed_b601_dm_follower \
+  --robot.id=follower1 \
+  --robot.port=/dev/ttyACM0 \
+  --robot.can_adapter=damiao \
   --teleop.type=rebot_arm_102_leader \
   --teleop.id=rebot_arm_102_leader \
   --teleop.port=/dev/ttyUSB0 \
-  --robot.type=seeed_b601_dm_follower \
-    --robot.id=follower1 \
-    --robot.port=/dev/ttyACM4 \
-    --robot.can_adapter=damiao
+  --fps=100 \
+  --display_data=true
+```
+
+### 双臂遥操作
+
+双 reBot Arm 102 主手使用 `bi_rebot_arm_102_leader`，可直接配合 `bi_seeed_b601_rt_follower` 使用。
+双臂主手输出的 action key 会自动加左右前缀：
+
+- `left_shoulder_pan.pos` ... `left_gripper.pos`
+- `right_shoulder_pan.pos` ... `right_gripper.pos`
+
+这些 key 会被 `bi_seeed_b601_rt_follower` 拆回左右两条单臂 action。
+左右主手方向可以分别用 `--teleop.left_joint_directions=...` 和
+`--teleop.right_joint_directions=...` 覆盖。
+
+```bash
+lerobot-teleoperate \
+  --robot.type=bi_seeed_b601_rt_follower \
+  --robot.left_port=/dev/ttyACM0 \
+  --robot.right_port=/dev/ttyACM1 \
+  --robot.id=bi_follower \
+  --robot.can_adapter=damiao \
+  --robot.action_mode=joint \
+  --teleop.type=bi_rebot_arm_102_leader \
+  --teleop.id=bi_rebot_arm_102_leader \
+  --teleop.left_port=/dev/ttyUSB0 \
+  --teleop.right_port=/dev/ttyUSB1 \
+  --fps=100 \
+  --display_data=true
+```
+
+### 双臂采数据
+
+采数据使用 LeRobot 标准 `lerobot-record`，teleoperator 类型和遥操作一致。
+
+```bash
+lerobot-record \
+  --robot.type=bi_seeed_b601_rt_follower \
+  --robot.left_port=/dev/ttyACM0 \
+  --robot.right_port=/dev/ttyACM1 \
+  --robot.id=bi_follower \
+  --robot.can_adapter=damiao \
+  --robot.action_mode=joint \
+  --teleop.type=bi_rebot_arm_102_leader \
+  --teleop.id=bi_rebot_arm_102_leader \
+  --teleop.left_port=/dev/ttyUSB0 \
+  --teleop.right_port=/dev/ttyUSB1 \
+  --dataset.repo_id=xensedyl/b601-bi-arm102-demo \
+  --dataset.single_task="Teleoperate dual B601 with dual Arm102 leaders" \
+  --dataset.num_episodes=3 \
+  --dataset.fps=30 \
+  --resume=false \
+  --dataset.push_to_hub=true \
+  --display_data=false
 ```
 
 ## 示例脚本
@@ -64,7 +122,7 @@ lerobot-teleoperate \
 
 用途：
 
-- 直接从 SDK 读取 reBot Arm 102 原始舊机角度
+- 直接从 SDK 读取 reBot Arm 102 原始舵机角度
 - 验证舵机 ID 与关节名称的映射关系
 - 检查某个关节是否真的在硬件层发生变化
 
@@ -129,11 +187,11 @@ python examples/read_leader_follower_compare.py --leader-port /dev/ttyUSB0 --fol
 
 - 在主手上移动一个关节，观察 `raw` 列是否随之变化
 - 对比 `mapped` 与 `follower` 的变化方向是否一致
-- 若方向相反，修改 follower 配置中的 `joint_directions` 对应关节
+- 若方向相反，修改 leader 配置中的 `joint_directions` 对应关节
 - 若 `leader` 与预期差异大，检查 `joint_ranges` 是否覆盖实际运动范围
 
 ## 说明
 
-- 按当前实现，启动校准会把每个 reBot Arm 102 舊机的当前位置重设为零点。
+- 按当前实现，启动校准会把每个 reBot Arm 102 舵机的当前位置重设为零点。
 - `joint_ranges` 取自配置文件，而不是校准数据。
 - 如果某个关节看起来总是卡在某个限位附近，优先检查 `joint_ranges`。

@@ -36,7 +36,7 @@ class RebotArm102Leader(Teleoperator):
 
     def _validate_config(self) -> None:
         required_keys = set(self.config.joint_ids)
-        for field_name in ("joint_ranges",):
+        for field_name in ("joint_ranges", "joint_directions"):
             keys = set(getattr(self.config, field_name))
             if keys != required_keys:
                 raise ValueError(
@@ -175,6 +175,24 @@ class RebotArm102Leader(Teleoperator):
         # Fallback: direct modular arithmetic (should never be reached)
         return value - round((value - center) / 360.0) * 360.0, 4096
 
+    def _map_gripper_position(self, raw_position: float) -> float:
+        """Map the Arm 102 gripper servo angle to LeRobot's normalized gripper action."""
+        range_min, range_max = self.config.joint_ranges["gripper"]
+        direction = float(self.config.joint_directions["gripper"])
+        if direction == 0.0:
+            raise ValueError("joint_directions['gripper'] must be non-zero.")
+
+        full_scale = max(abs(float(range_min)), abs(float(range_max)))
+        if full_scale > 1.0 and abs(direction) > 1.0:
+            # Historical B601 mapping used gripper=-4 and a 0..270 follower range:
+            # 67.5 deg leader travel * 4 = 270 deg B601 gripper travel. The RT
+            # serial gripper instead expects normalized 0=open, 1=closed.
+            normalized = self._clamp(raw_position * abs(direction) / full_scale, 0.0, 1.0)
+            return 1.0 - normalized if direction < 0.0 else normalized
+
+        position = raw_position * direction
+        return self._clamp(position, float(range_min), float(range_max))
+
     def get_action(self) -> RobotAction:
         start = time.perf_counter()
 
@@ -194,13 +212,22 @@ class RebotArm102Leader(Teleoperator):
             
         action_dict: dict[str, Any] = {}
         for motor_name in self.motor_names:
+            if motor_name == "gripper":
+                action_dict["gripper.pos"] = self._map_gripper_position(raw_positions[motor_name])
+                continue
+
             range_min, range_max = self.config.joint_ranges[motor_name]
-            unwrapped, k = self._round_to_valid_range(raw_positions[motor_name],float(range_min),float(range_max))
-            position = unwrapped
+            direction = float(self.config.joint_directions[motor_name])
+            if direction == 0.0:
+                raise ValueError(f"joint_directions[{motor_name!r}] must be non-zero.")
+            raw_range_min = min(float(range_min) / direction, float(range_max) / direction)
+            raw_range_max = max(float(range_min) / direction, float(range_max) / direction)
+            unwrapped, k = self._round_to_valid_range(raw_positions[motor_name], raw_range_min, raw_range_max)
+            position = unwrapped * direction
             if k > 0:
                 logger.debug(
                     f"Servo {motor_name} (id={self.config.joint_ids[motor_name]}) has wrapped {k} * 360°. "
-                    f"Unwrapped pos: {unwrapped:.1f}° (raw: {raw_positions[motor_name]:.1f}°)"
+                    f"Unwrapped raw: {unwrapped:.1f}° (raw: {raw_positions[motor_name]:.1f}°, direction: {direction:.2f})"
                 )
             action_dict[f"{motor_name}.pos"] = self._clamp(position,float(range_min),float(range_max),)
 

@@ -7,8 +7,7 @@ This repository provides a LeRobot teleoperator integration for the reBot Arm 10
 The implementation is intentionally opinionated:
 
 - joint names are aligned to reBot B601
-- leader-side joint limits are taken directly from config
-- follower-side direction mapping is configured in the follower integration
+- leader-side joint limits and direction mapping are taken directly from config
 - each startup calibration sets the current servo origin to zero
 
 ## Supported Setup
@@ -26,9 +25,10 @@ cd lerobot-teleoperator-rebot-arm-102
 pip install -e .
 ```
 
-This package registers one teleoperator type:
+This package registers two teleoperator types:
 
 - `rebot_arm_102_leader`
+- `bi_rebot_arm_102_leader`
 
 ## Default Mapping
 
@@ -40,22 +40,82 @@ This package registers one teleoperator type:
 - `wrist_roll` -> servo ID `5`
 - `gripper` -> servo ID `6`
 
-Leader-side joint limits are defined in `lerobot_teleoperator_rebot_arm_102/config_rebot_arm_102_leader.py`.
-Follower-side direction mapping is defined in the B601 follower configuration.
+Leader-side joint limits and direction mapping are defined in
+`lerobot_teleoperator_rebot_arm_102/config_rebot_arm_102_leader.py`. The default
+mapping is aligned to B601 joint-space actions: `shoulder_pan=-1`,
+`shoulder_lift=-1`, `elbow_flex=1`, `wrist_flex=1`, `wrist_yaw=1`,
+`wrist_roll=-1`, `gripper=-4`.
+For the RT serial gripper, `gripper.pos` is emitted as a normalized value:
+`0=open`, `1=closed`.
 
 ## Usage
 
-Standard teleoperation:
+### Single-Arm Teleoperation
 
 ```bash
 lerobot-teleoperate \
+  --robot.type=seeed_b601_dm_follower \
+  --robot.id=follower1 \
+  --robot.port=/dev/ttyACM4 \
+  --robot.can_adapter=damiao \
   --teleop.type=rebot_arm_102_leader \
   --teleop.id=rebot_arm_102_leader \
   --teleop.port=/dev/ttyUSB0 \
-  --robot.type=seeed_b601_dm_follower \
-    --robot.id=follower1 \
-    --robot.port=/dev/ttyACM4 \
-    --robot.can_adapter=damiao
+  --fps=100 \
+  --display_data=true
+```
+
+### Dual-Arm Teleoperation
+
+Use `bi_rebot_arm_102_leader` with a bimanual follower such as `bi_seeed_b601_rt_follower`.
+The dual leader outputs prefixed joint actions:
+
+- `left_shoulder_pan.pos` ... `left_gripper.pos`
+- `right_shoulder_pan.pos` ... `right_gripper.pos`
+
+These keys are consumed directly by `bi_seeed_b601_rt_follower`.
+The left and right leader directions can be overridden separately with
+`--teleop.left_joint_directions=...` and `--teleop.right_joint_directions=...`.
+
+```bash
+lerobot-teleoperate \
+  --robot.type=bi_seeed_b601_rt_follower \
+  --robot.left_port=/dev/ttyACM0 \
+  --robot.right_port=/dev/ttyACM1 \
+  --robot.id=bi_follower \
+  --robot.can_adapter=damiao \
+  --robot.action_mode=joint \
+  --teleop.type=bi_rebot_arm_102_leader \
+  --teleop.id=bi_rebot_arm_102_leader \
+  --teleop.left_port=/dev/ttyUSB0 \
+  --teleop.right_port=/dev/ttyUSB1 \
+  --fps=100 \
+  --display_data=true
+```
+
+### Dual-Arm Data Recording
+
+Recording uses the standard LeRobot `lerobot-record` entrypoint. The teleoperator type is the same as teleoperation.
+
+```bash
+lerobot-record \
+  --robot.type=bi_seeed_b601_rt_follower \
+  --robot.left_port=/dev/ttyACM0 \
+  --robot.right_port=/dev/ttyACM1 \
+  --robot.id=bi_follower \
+  --robot.can_adapter=damiao \
+  --robot.action_mode=joint \
+  --teleop.type=bi_rebot_arm_102_leader \
+  --teleop.id=bi_rebot_arm_102_leader \
+  --teleop.left_port=/dev/ttyUSB0 \
+  --teleop.right_port=/dev/ttyUSB1 \
+  --dataset.repo_id=xensedyl/b601-bi-arm102-demo \
+  --dataset.single_task="Teleoperate dual B601 with dual Arm102 leaders" \
+  --dataset.num_episodes=3 \
+  --dataset.fps=30 \
+  --resume=false \
+  --dataset.push_to_hub=true \
+  --display_data=false
 ```
 
 ## Example Scripts
@@ -118,7 +178,7 @@ What to look for:
 - move one joint on the leader
 - move the same joint by hand on the follower if needed
 - compare whether `mapped` and `follower` change in the same sign direction
-- if one side increases while the other decreases, update that joint in the follower `joint_directions` config
+- if one side increases while the other decreases, update that joint in the leader `joint_directions` config
 
 ## Notes
 

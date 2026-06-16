@@ -3,7 +3,7 @@
 import argparse
 import time
 
-from fashionstar_uart_sdk.uart_pocket_handler import PortHandler
+from motorbridge_smart_servo import FashionStarServo, ServoBusError, ServoMonitor
 
 
 DEFAULT_JOINT_IDS = {
@@ -31,35 +31,41 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    porthandler = PortHandler(args.port, args.baudrate)
-    porthandler.openPort()
 
-    # Initialize servos: ping, unlock, and reset multi-turn counter.
-    # Without this the SDK returns None for all monitor fields.
-    for servo_id in DEFAULT_JOINT_IDS.values():
-        if not porthandler.ping(servo_id):
-            print(f"WARNING: servo id={servo_id} did not respond to ping")
-        porthandler.write["Stop_On_Control_Mode"](servo_id, "unlocked", 900)
-        time.sleep(0.01)
-    porthandler.ResetLoop(0xFF)
+    with FashionStarServo(args.port, baudrate=args.baudrate) as bus:
+        # Initialize servos: ping, unlock, and reset each multi-turn counter.
+        # The current motorbridge-smart-servo SDK does not use the old
+        # fashionstar_uart_sdk broadcast ResetLoop API.
+        for joint_name, servo_id in DEFAULT_JOINT_IDS.items():
+            if not bus.ping(servo_id):
+                print(f"WARNING: {joint_name} servo id={servo_id} did not respond to ping")
+            bus.unlock(servo_id)
+            time.sleep(0.01)
+            bus.reset_multi_turn(servo_id)
 
-    try:
-        print("Reading raw servo angles. Press Ctrl+C to stop.")
-        while True:
-            monitor_data = porthandler.sync_read["Monitor"](DEFAULT_JOINT_IDS)
-            values = []
-            for joint_name in DEFAULT_JOINT_IDS:
-                state = monitor_data.get(joint_name)
-                if state is None or state.current_position is None:
-                    values.append(f"{joint_name}=<missing>")
-                else:
-                    values.append(f"{joint_name}={float(state.current_position):8.2f}")
-            print("  ".join(values))
-            time.sleep(args.interval)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        porthandler.closePort()
+        id_to_name = {servo_id: joint_name for joint_name, servo_id in DEFAULT_JOINT_IDS.items()}
+        servo_ids = list(DEFAULT_JOINT_IDS.values())
+
+        try:
+            print("Reading raw servo angles. Press Ctrl+C to stop.")
+            while True:
+                monitor_data: dict[int, ServoMonitor | None] = bus.sync_monitor(servo_ids)
+                values = []
+                for servo_id in servo_ids:
+                    joint_name = id_to_name[servo_id]
+                    state = monitor_data.get(servo_id)
+                    if state is None:
+                        values.append(f"{joint_name}=<missing>")
+                    else:
+                        values.append(f"{joint_name}={state.angle_deg:8.2f}")
+                print("  ".join(values), flush=True)
+                time.sleep(args.interval)
+        except KeyboardInterrupt:
+            pass
+        except ServoBusError as exc:
+            print(f"ERROR: servo bus read failed: {exc}")
+            print("[EMERGENCY STOP] Hold the follower arm and cut power if needed.")
+            raise
 
 
 if __name__ == "__main__":
