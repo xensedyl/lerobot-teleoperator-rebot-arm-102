@@ -93,7 +93,24 @@ lerobot-teleoperate \
 
 ### 双臂采数据
 
-采数据使用 LeRobot 标准 `lerobot-record`，teleoperator 类型和遥操作一致。
+采数据有两个入口，含义不同：
+
+- `lerobot-record`：使用当前环境里的 LeRobot 官方 recorder。是否支持实时编码，取决于你安装的
+  `/home/xense/rebot_lerobot/lerobot` 本身。
+- `lerobot-record-rebot-arm-102`：使用本仓库自己的 recorder 和实时编码实现，不依赖主
+  `lerobot` 是否支持 `--dataset.streaming_encoding`。
+
+`bi_seeed_b601_rt_follower` 默认会输出机械臂关节位置观测，不需要额外传 robot 参数。
+本仓库 `lerobot-record-rebot-arm-102` 会把 action 和 `observation.state` 的关节字段统一写成
+`left_joint_1.pos ... left_joint_6.pos, left_gripper.pos, right_joint_1.pos ...
+right_joint_6.pos, right_gripper.pos`。B601 RT follower 的内部控制量是角度；本仓库
+recorder 默认用 `--dataset.joint_unit=rad` 把 action 和 joint observation 的非夹爪
+`.pos` 在写入 dataset 前转换成弧度，夹爪仍保持 `0=open, 1=closed` 的归一化值。
+
+#### 方案 1：LeRobot 官方 recorder，默认编码流程
+
+这条命令完全走官方 `lerobot-record`。不传 `--dataset.streaming_encoding`，视频按当前
+LeRobot 默认流程在 episode 保存阶段编码。
 
 ```bash
 lerobot-record \
@@ -111,9 +128,80 @@ lerobot-record \
   --dataset.single_task="Teleoperate dual B601 with dual Arm102 leaders" \
   --dataset.num_episodes=3 \
   --dataset.fps=30 \
+  --dataset.episode_time_s=600 \
+  --dataset.reset_time_s=120 \
   --resume=false \
   --dataset.push_to_hub=true \
   --display_data=false
+```
+
+#### 方案 2：LeRobot 官方 recorder，官方实时编码
+
+如果当前环境里的主 `lerobot` 已经支持 `--dataset.streaming_encoding`，可以继续使用官方
+`lerobot-record`，实时编码也由官方实现负责。如果提示 unknown argument，说明当前
+LeRobot 官方 recorder 不支持这两个参数，请使用方案 3。
+
+```bash
+lerobot-record \
+  --robot.type=bi_seeed_b601_rt_follower \
+  --robot.left_port=/dev/ttyACM0 \
+  --robot.right_port=/dev/ttyACM1 \
+  --robot.id=bi_follower \
+  --robot.can_adapter=damiao \
+  --robot.action_mode=joint \
+  --teleop.type=bi_rebot_arm_102_leader \
+  --teleop.id=bi_rebot_arm_102_leader \
+  --teleop.left_port=/dev/ttyUSB0 \
+  --teleop.right_port=/dev/ttyUSB1 \
+  --dataset.repo_id=xensedyl/b601-bi-arm102-demo \
+  --dataset.single_task="Teleoperate dual B601 with dual Arm102 leaders" \
+  --dataset.num_episodes=3 \
+  --dataset.fps=30 \
+  --dataset.episode_time_s=600 \
+  --dataset.reset_time_s=120 \
+  --dataset.streaming_encoding=true \
+  --dataset.vcodec=auto \
+  --resume=false \
+  --dataset.push_to_hub=true \
+  --display_data=false
+```
+
+#### 方案 3：本仓库 recorder，仓库内实时编码
+
+这条命令走 `lerobot-teleoperator-rebot-arm-102` 自己的 recorder。实时编码由本仓库的
+`StreamingLeRobotDataset` 实现，不使用 LeRobot 官方 recorder 的实时编码实现。
+
+```bash
+lerobot-record-rebot-arm-102 \
+  --robot.type=bi_seeed_b601_rt_follower \
+  --robot.left_port=/dev/ttyACM0 \
+  --robot.right_port=/dev/ttyACM1 \
+  --robot.id=bi_follower \
+  --robot.can_adapter=damiao \
+  --robot.action_mode=joint \
+  --teleop.type=bi_rebot_arm_102_leader \
+  --teleop.id=bi_rebot_arm_102_leader \
+  --teleop.left_port=/dev/ttyUSB0 \
+  --teleop.right_port=/dev/ttyUSB1 \
+  --dataset.repo_id=xensedyl/b601-bi-arm102-demo \
+  --dataset.single_task="Teleoperate dual B601 with dual Arm102 leaders" \
+  --dataset.num_episodes=3 \
+  --dataset.fps=30 \
+  --dataset.episode_time_s=600 \
+  --dataset.reset_time_s=120 \
+  --dataset.streaming_encoding=true \
+  --dataset.vcodec=auto \
+  --dataset.joint_unit=rad \
+  --resume=false \
+  --dataset.push_to_hub=false \
+  --display_data=false
+```
+
+如果要使用本仓库 recorder 但关闭实时编码，把上面命令中的实时编码参数改为：
+
+```bash
+  --dataset.streaming_encoding=false \
+  --dataset.vcodec=libsvtav1 \
 ```
 
 ## 示例脚本

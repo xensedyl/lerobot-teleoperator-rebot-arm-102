@@ -95,7 +95,26 @@ lerobot-teleoperate \
 
 ### Dual-Arm Data Recording
 
-Recording uses the standard LeRobot `lerobot-record` entrypoint. The teleoperator type is the same as teleoperation.
+There are two recording entrypoints with different implementations:
+
+- `lerobot-record`: uses the official LeRobot recorder from the currently installed
+  `/home/xense/rebot_lerobot/lerobot` checkout. Streaming encoding support depends on that LeRobot version.
+- `lerobot-record-rebot-arm-102`: uses this package's recorder and package-local streaming encoder, independent
+  of whether the main `lerobot` recorder supports `--dataset.streaming_encoding`.
+
+`bi_seeed_b601_rt_follower` publishes arm joint position observations by default, so no extra robot
+option is needed. The package-local `lerobot-record-rebot-arm-102` entrypoint writes both `action`
+and `observation.state` joint fields as
+`left_joint_1.pos ... left_joint_6.pos, left_gripper.pos, right_joint_1.pos ...
+right_joint_6.pos, right_gripper.pos`. The B601 RT follower internally controls joints in degrees.
+This package recorder defaults to `--dataset.joint_unit=rad`, which converts non-gripper joint `.pos`
+action and observation values to radians right before writing dataset frames. Gripper values stay
+normalized as `0=open, 1=closed`.
+
+#### Option 1: Official LeRobot Recorder, Default Encoding
+
+This command uses the official `lerobot-record` path. It does not pass
+`--dataset.streaming_encoding`, so video encoding follows the default behavior of the installed LeRobot recorder.
 
 ```bash
 lerobot-record \
@@ -116,6 +135,71 @@ lerobot-record \
   --resume=false \
   --dataset.push_to_hub=true \
   --display_data=false
+```
+
+#### Option 2: Official LeRobot Recorder, Official Streaming Encoding
+
+If your installed LeRobot recorder supports `--dataset.streaming_encoding`, this command keeps using the official
+`lerobot-record` implementation and lets LeRobot handle streaming encoding. If it reports an unknown argument,
+use option 3 instead.
+
+```bash
+lerobot-record \
+  --robot.type=bi_seeed_b601_rt_follower \
+  --robot.left_port=/dev/ttyACM0 \
+  --robot.right_port=/dev/ttyACM1 \
+  --robot.id=bi_follower \
+  --robot.can_adapter=damiao \
+  --robot.action_mode=joint \
+  --teleop.type=bi_rebot_arm_102_leader \
+  --teleop.id=bi_rebot_arm_102_leader \
+  --teleop.left_port=/dev/ttyUSB0 \
+  --teleop.right_port=/dev/ttyUSB1 \
+  --dataset.repo_id=xensedyl/b601-bi-arm102-demo \
+  --dataset.single_task="Teleoperate dual B601 with dual Arm102 leaders" \
+  --dataset.num_episodes=3 \
+  --dataset.fps=30 \
+  --dataset.streaming_encoding=true \
+  --dataset.vcodec=auto \
+  --resume=false \
+  --dataset.push_to_hub=true \
+  --display_data=false
+```
+
+#### Option 3: Package Recorder, Package-Local Streaming Encoding
+
+This command uses `lerobot-teleoperator-rebot-arm-102`'s own recorder. Streaming encoding is implemented by this
+package's `StreamingLeRobotDataset`, not by the official LeRobot recorder.
+
+```bash
+lerobot-record-rebot-arm-102 \
+  --robot.type=bi_seeed_b601_rt_follower \
+  --robot.left_port=/dev/ttyACM0 \
+  --robot.right_port=/dev/ttyACM1 \
+  --robot.id=bi_follower \
+  --robot.can_adapter=damiao \
+  --robot.action_mode=joint \
+  --teleop.type=bi_rebot_arm_102_leader \
+  --teleop.id=bi_rebot_arm_102_leader \
+  --teleop.left_port=/dev/ttyUSB0 \
+  --teleop.right_port=/dev/ttyUSB1 \
+  --dataset.repo_id=xensedyl/b601-bi-arm102-demo \
+  --dataset.single_task="Teleoperate dual B601 with dual Arm102 leaders" \
+  --dataset.num_episodes=3 \
+  --dataset.fps=30 \
+  --dataset.streaming_encoding=true \
+  --dataset.vcodec=auto \
+  --dataset.joint_unit=rad \
+  --resume=false \
+  --dataset.push_to_hub=true \
+  --display_data=false
+```
+
+To use this package recorder without streaming encoding, replace the streaming options above with:
+
+```bash
+  --dataset.streaming_encoding=false \
+  --dataset.vcodec=libsvtav1 \
 ```
 
 ## Example Scripts

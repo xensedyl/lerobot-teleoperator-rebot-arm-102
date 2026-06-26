@@ -22,9 +22,12 @@ dependencies = [
   "motorbridge-smart-servo",
 ]
 
+[project.scripts]
+lerobot-record-rebot-arm-102 = "lerobot_teleoperator_rebot_arm_102.scripts.record_rebot_arm_102:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["lerobot_teleoperator_rebot_arm_102"]
+include = ["lerobot_teleoperator_rebot_arm_102", "lerobot_teleoperator_rebot_arm_102.*"]
 exclude = ["*.egg-info"]
 
 [tool.setuptools_scm]
